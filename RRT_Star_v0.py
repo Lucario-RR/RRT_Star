@@ -4,62 +4,6 @@ import math
 import random
 import csv
 
-def read_map_from_file(filename):
-    '''
-    This functions reads a csv file describing a map and returns the map data
-    Inputs:
-        - filename (string): name of the file to read
-    Outputs:
-        - map (tuple): A map is a tuple of the form (grid_size, start_pos, goal_pos, [obstacles])
-            grid_size is an tuple (length, height) representing the size of the map
-            start_pos is a tuple (x, y) representing the x,y coordinates of the start position
-            goal_pos is a tuple (x, y) representing the x,y coordinate of the goal position
-            obstacles is a list of tuples. Each tuple represents a single  circular obstacle and is of the form (x, y, radius).
-                x is an integer representing the x coordinate of the obstacle
-                y is an integer representing the y coordinate of the obstacle
-                radius is an integer representing the radius of the obstacle
-    '''
-
-    #Your code goes here
-    # CSV file -> list
-    with open(filename,'r') as file:
-        # Convert csv file into an CSV object
-        csv_temp = csv.reader(file)
-        
-        # Convert CSV object into list
-        data = list(csv_temp)
-
-    # Extract map variables
-    # Extract values
-    x_Dimension = int(data[0][0])
-    y_Dimension = int(data[0][1])
-    start_x = int(data[1][0])
-    start_y = int(data[1][1])
-    goal_x = int(data[2][0])
-    goal_y = int(data[2][1])
-    # Combine into turple
-    grid_size = (x_Dimension, y_Dimension)
-    start_pos = (start_x,start_y)
-    goal_pos = (goal_x,goal_y)
-    
-    # Extract obstacles variables
-    obstacles = [] # A list where all obstacles stores
-    for line in data[3:]: # Loop every obstacles until end of list
-        # Extract values
-        obstacle_x = int(line[0])
-        obstacle_y = int(line[1])
-        obstacle_r = int(line[2])
-        # Combine into turple
-        obstacle = (obstacle_x, obstacle_y, obstacle_r)
-        # Append into big obstacles list
-        obstacles.append(obstacle)
-    
-    # Combine everything together
-    map = (grid_size, start_pos, goal_pos, obstacles)
-
-    # Return map
-    return map
-
 
 
 class Node:
@@ -76,7 +20,7 @@ class Node:
         self.x
         self.y
         self.parent
-        euclideanDistance(self, node_2)->float
+        euclideanDistance(self, node_2:Node)->float
         """
         self.x = x
         self.y = y
@@ -87,21 +31,104 @@ class Node:
         Calculating the straight line distance between self and imported node
 
         Args:
-            node_2: 2nd node to compare, datatype class Node
+            node_2: 2nd node to calculate, datatype class Node
             
         Returns:
-            length in float
+            Length in float
         """
         return math.sqrt((self.x - node_2.x)**2 + (self.y - node_2.y)**2)
 
 
 
-class Obstacle:
-    def __init__(self):
-        self.type = None
-        self.position = None # Use node
-        self.radius = None
-    def isBlocked(self):
+class ObstacleCircle:
+    def __init__(self, center:Node, radius:float):
+        """
+        Stores circular obstacles
+
+        Args:
+            center: Center of circle in class Node
+            radius: Radius in Float
+            
+        Public Variables and Methods:
+            self.type
+            self.center
+            self.radius
+            isBlocked(self,node_1:Node,node_2:Node=None)->bool
+        """
+        self.type = 'circle' # Identify the type of obstacle
+        self.center = center
+        self.radius = radius
+    
+    def isBlocked(self,node_1:Node,node_2:Node=None)->bool:
+        """
+        Check if 1 node or line between 2 nodes is inside this circular object
+
+        Args:
+            node_1: 1st node to check, datatype class Node
+            node_2: 2nd node to form a line with node_1, datatype class Node
+            
+        Returns:
+            True if blocked; False if not blocked
+        """
+        # Check if node 1 is inside circle or not
+        node_1_blocked = (self.center.euclideanDistance(node_1) <= self.radius)
+        
+        # Return if only 1 node passed in
+        if node_2 is None:
+            return node_1_blocked
+
+        # Check if node 2 is inside circle or not
+        node_2_blocked = (self.center.euclideanDistance(node_2) <= self.radius)
+
+        # Return False if either of node 1 or node 2 inside circle
+        if node_1_blocked or node_2_blocked:
+            return False
+        
+        # Check line between node 1 and 2 touches or intersects or outside
+        # Rearrange line equation ax + by + c = 0 and initialize variables
+        a = node_2.y - node_1.y
+        b = node_1.x - node_2.y
+        c = ((node_2.x - node_1.x) * node_1.y - (node_2.y - node_1.y) * node_1.x)
+        x = self.center.x
+        y = self.center.y
+        # Calculate closest distance to circle center using d=abs(ax+by+c)/((a^2+b^2)^1/2)
+        distance = ((abs(a * x + b * y + c)) /
+			        math.sqrt(a * a + b * b))
+        
+        # Return Result
+        if (self.radius < distance): return True
+        else: return False
+
+
+
+class ObstaclePolygon:
+    def __init__(self,type:str,positions:list[Node]=[]):
+        """
+        Stores circular obstacles
+
+        Args:
+            type: Type of this object, e.g triangle, rectangle...
+            positions: List of corner in class Node
+            
+        Public Variables and Methods:
+            self.type
+            self.positions
+            isBlocked(self)->bool
+        """
+        self.type = type
+        self.positions = positions # List of corners in class Node
+    
+    def isBlocked(self,node_1:Node,node_2:Node=None)->bool:
+        """
+        Check if 1 node or line between 2 nodes is inside this obstacle
+
+        Args:
+            node_1: 1st node to check, datatype class Node
+            node_2: 2nd node to form a line with node_1, datatype class Node
+            
+        Returns:
+            True if blocked; False if not blocked
+        """
         pass
 
 
