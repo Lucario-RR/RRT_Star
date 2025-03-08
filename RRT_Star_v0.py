@@ -38,6 +38,9 @@ class Node:
         """
         return math.sqrt((self.x - node_2.x)**2 + (self.y - node_2.y)**2)
 
+    def __str__(self):
+        return str(f"{self.x},{self.y}")
+
 
 
 class ObstacleCircle:
@@ -167,11 +170,12 @@ class Map:
 
 
 class RRT:
-    def __init__(self, map:Map, nodes:list[Node]=[], int_node:bool=True, exploration_bias:float=0, max_step:float=10, goal_radius:float=10, max_iteration:int=100, star_iteration:int=0):
+    def __init__(self, map:Map, nodes:list[Node]=[], int_node:bool=True, exploration_bias:float=0, max_step:float=10, goal_radius:float=10, max_iteration:int=10000, star_iteration:int=0):
         # Map
         self.map = map
         # Nodes
-        self.nodes = nodes.append(self.map.start) # Add start into node list
+        self.nodes = nodes
+        self.nodes.append(self.map.start) # Add start into node list
         # Config
         self.int_node = int_node
         self.exploration_bias = exploration_bias
@@ -207,9 +211,9 @@ class RRT:
                 x = random.uniform(0, self.map.x_size)
                 y = random.uniform(0, self.map.y_size)
         
-        self.random_node = Node(x, y)
+        return Node(x, y)
     
-    def nearestNode(self, new_node:Node)->Node:
+    def nearestNode(self)->Node:
         """
         Find nearest node in exist node list 
 
@@ -222,12 +226,15 @@ class RRT:
         # Find distance to all existing nodes
         for node in self.nodes:
             # And add this into distance list
-            distance_list.append(new_node.euclideanDistance(node))
+            distance = self.random_node.euclideanDistance(node)
+            distance_list.append(distance)
         
         # Return the node has minimum distance
-        return self.nodes[distance_list.index(min(distance_list))]
+        minimum_index = distance_list.index(min(distance_list))
+        self.nearest_node = self.nodes[minimum_index]
+        return self.nearest_node
 
-    def placeNode(self, random_node:Node, nearest_node:Node)->Node:
+    def placeNode(self)->Node:
         """
         Place new node either within step, or limit it to step size
 
@@ -239,16 +246,16 @@ class RRT:
             Node which fit maximum step size requirement
         """
         # Find distance between 2 points
-        distance = random_node.euclideanDistance(nearest_node)
+        distance = self.random_node.euclideanDistance(self.nearest_node)
 
         # If distance < max step, return that node
         if distance <= self.max_step:
-            return random_node
+            return self.random_node
 
         # Limit the step to within step size if too long
         # Limit using ratio
-        x_new = nearest_node.x + (self.max_step / distance) * (random_node.x - nearest_node.x)
-        y_new = nearest_node.y + (self.max_step / distance) * (random_node.y - nearest_node.y)
+        x_new = self.nearest_node.x + (self.max_step / distance) * (self.random_node.x - self.nearest_node.x)
+        y_new = self.nearest_node.y + (self.max_step / distance) * (self.random_node.y - self.nearest_node.y)
 
         # Check if round needed
         if self.int_node:
@@ -274,12 +281,16 @@ class RRT:
                 # Return True if blocked by any obstacle
                 return True
         # Return False if not blocked at all
-        return True
+        return False
 
     def ifExistNode(self, new_node:Node)->bool:
-        return any(node.x == new_node.x and node.y == new_node.y for node in self.nodes)
+        # Loop all the nodes to find if has same value
+        for node in self.nodes:
+            if (node.x == new_node.x) and (node.y == new_node.y):
+                return True
+        return False
 
-    def connectNode(self, nearest_node:Node, new_node:Node):
+    def connectNode(self, old_node:Node, new_node:Node):
         # For RRT Star
         if self.star_iteration:
             # Remained for RRT*
@@ -289,20 +300,27 @@ class RRT:
         
         else:
             # Assign parent to new node
-            new_node.parent = nearest_node
+            new_node.parent = old_node
             # Return new node with parent
             self.nodes.append(new_node)
 
     def reachGoal(self):
-        # Check if reach goal
+        # Check if last node is within goal range
         if self.new_node.euclideanDistance(self.map.goal) < self.goal_radius:
-            return True
-        else:
-            return False
+            # Check connection to goal has obstacle
+            if not self.ifObstacle(self.map.goal, self.new_node):
+                return True
+        # Return False if requirement not fit
+        return False
 
     def getPath(self):
-        pass
         # Get result path if success
+        current_node = self.nodes[-1]
+        path = []
+        while current_node.parent is not None:
+            path.append(((current_node.x,current_node.y),(current_node.parent.x,current_node.parent.y)))
+            current_node = current_node.parent
+        return path
 
     def buildTree(self):
         """
@@ -323,18 +341,20 @@ class RRT:
             self.new_node = None
             # Increment current iteration
             self.current_iteration += 1
+            print(f"Iteration: {self.current_iteration}")
 
             # 1. Generate a random node
-            self.newNode()
+            self.random_node = self.newNode()
             # Regenerate if node exist  ### Leave into generate new node part
-            while self.random_node in self.nodes:
-                self.newNode()
+            while self.ifExistNode(self.random_node):
+                ### need break mechanism
+                self.random_node = self.newNode()
 
             # 2. Find nearest exist node
-            nearest_node = self.newNode(self.random_node)
+            nearest_node = self.nearestNode()
 
             # 3. Place the new node
-            self.new_node = self.placeNode(self.random_node, nearest_node)
+            self.new_node = self.placeNode()
             
             # 4. If new node does not exist, and not obstacled, connect node and add to list
             if not (self.ifExistNode(self.new_node) or self.ifObstacle(nearest_node, self.new_node)):
@@ -342,14 +362,18 @@ class RRT:
             
             # 5. Check if reach goal, if yes, finish reachGoal(self)
             if self.reachGoal():
-                # Check connection to goal has obstacle
-                if self.ifObstacle(self.new_node, self.map.goal):
-                    # Connect goal if in range
-                    self.connectNode(self.new_node, self.map.goal)
+                print("Solution found")
+                # Connect goal if in range
+                self.connectNode(self.new_node, self.map.goal)
+                ### Call output path
+                path = self.getPath()
+                print(path)
+                exit()
             
             # Check if reach maximum iteration
             if self.current_iteration >= self.max_iteration:
                 # Break if reach max iteration
+                print("No solution")
                 break
 
     def plotNode(self):
@@ -378,3 +402,8 @@ class RRT:
         # Plot graph while going
         pass
 
+
+# Test run
+map = Map((100,100),(5,5),(95,95))
+rrt = RRT(map)
+rrt.buildTree()
