@@ -134,7 +134,7 @@ class ObstaclePolygon:
 
 
 class Map:
-    def __init__(self,map:tuple,start:tuple,goal:tuple,obstacles:list=[]):
+    def __init__(self,map:tuple,start:tuple,goal:tuple,obstacles:list[ObstacleCircle,ObstaclePolygon]=[]):
         """
         Stores everything about map, including map size, start and goal points, list of obstacles
 
@@ -167,78 +167,165 @@ class Map:
 
 
 class RRT:
-    def __init__(self, map:Map, nodes:list=[], max_step:float=10, goal_radius:float=10, exploration_bias:float=0, max_iteration:int=100, enable_star:bool=True):
+    def __init__(self, map:Map, nodes:list[Node]=[], int_node:bool=True, exploration_bias:float=0, max_step:float=10, goal_radius:float=10, max_iteration:int=100, star_iteration:int=0):
         # Map
         self.map = map
         # Nodes
-        self.nodes = nodes
+        self.nodes = nodes.append(self.map.start) # Add start into node list
         # Config
+        self.int_node = int_node
+        self.exploration_bias = exploration_bias
         self.max_step = max_step
         self.goal_radius = goal_radius
-        self.exploration_bias = exploration_bias
-        self.max_iteration = max_iteration
-        self.enable_star = enable_star
+        self.current_iteration = 0 # Define current iteration
+        self.max_iteration = max_iteration # Max iteration before finding a path
+        self.star_iteration = star_iteration # Number of star iteration, set 0 to disable
     
     def newNode(self)->Node:
         """
-        Create a new node randomly, may add bias later?????
+        Create a new node randomly, bias may apply. 
+        May choose to round to integer nodes.
 
         Returns:
             Node with random x and y
         """
-        x = random.uniform(0, self.map.x_length)
-        y = random.uniform(0, self.map.y_length)
+        # Generate new node biased towards goal
+        if self.exploration_bias:
+            pass
+        
+        # Generate new node randomly in map
+        else:
+            # If int_node enable, nodes will be integers only
+            if self.int_node:
+                # Generate random integer node
+                x = random.randint(0, self.map.x_size)
+                y = random.randint(0, self.map.y_size)
+            
+            # Generate random numbers with  decimal points
+            else:
+                # Generate random node
+                x = random.uniform(0, self.map.x_size)
+                y = random.uniform(0, self.map.y_size)
+        
         return Node(x, y)
     
-    def nearestNode(self):
+    def nearestNode(self, new_node:Node)->Node:
         """
-        Calculating the straight line distance between self and imported node
+        Find nearest node in exist node list 
+
+        Returns:
+            Node which is closest to new random node
+        """
+        # Initialize an empty distance list
+        distance_list = []
+
+        # Find distance to all existing nodes
+        for node in self.nodes:
+            # And add this into distance list
+            distance_list.append(new_node.euclideanDistance(node))
+        
+        # Return the node has minimum distance
+        return self.nodes[distance_list.index(min(distance_list))]
+
+    def placeNode(self, random_node:Node, nearest_node:Node)->Node:
+        """
+        Place new node either within step, or limit it to step size
 
         Args:
-            node_2: 2nd node to compare, datatype class Node
+            random_node: New randomaly generated node to place or reference
+            nearest_node: Parent of new node
             
         Returns:
-            length in float
+            Node which fit maximum step size requirement
         """
-        # Return closest node
-        pass
-    def nearNodes(self):
+        # Find distance between 2 points
+        distance = random_node.euclideanDistance(nearest_node)
+
+        # If distance < max step, return that node
+        if distance <= self.max_step:
+            return random_node
+
+        # Limit the step to within step size if too long
+        # Limit using ratio
+        x_new = nearest_node.x + (self.max_step / distance) * (random_node.x - nearest_node.x)
+        y_new = nearest_node.y + (self.max_step / distance) * (random_node.y - nearest_node.y)
+
+        # Check if round needed
+        if self.int_node:
+            return Node(round(x_new),round(y_new))
+        else:
+            return Node(x_new,y_new)
+
+    def ifObstacle(self, nearest_node:Node, new_node:Node)->bool:
         """
-        Calculating the straight line distance between self and imported node
+        Loop all obstacles to check if new line has blocked
 
         Args:
-            node_2: 2nd node to compare, datatype class Node
+            nearest_node: Parent of new node
+            new_node: New generated node
             
         Returns:
-            length in float
+            True if blocked; False if not blocked
         """
-        # Return nodes inside range
-        pass
-    def isCollision(self):
-        """
-        Calculating the straight line distance between self and imported node
+        # Loop each obstacle
+        for obstacle in self.map.obstacles:
+            # Check if blocked
+            if obstacle.isBlocked(nearest_node, new_node):
+                # Return True if blocked by any obstacle
+                return True
+        # Return False if not blocked at all
+        return True
 
-        Args:
-            node_2: 2nd node to compare, datatype class Node
-            
-        Returns:
-            length in float
-        """
-        # Check collision
+    def connectNode(self):
+        # Connect nodes if needed
+        # 5*. If RRT*, place node , distance/max step, choose shorter
+        # 6*. Check nodes around, reconnect if required
         pass
+
+    def reachGoal(self):
+        pass
+        # Check if reach goal
+
     def buildTree(self):
         """
-        Calculating the straight line distance between self and imported node
-
-        Args:
-            node_2: 2nd node to compare, datatype class Node
-            
-        Returns:
-            length in float
+        1. Generate new node (done)
+        2. Find nearest node (done)
+        3. Check distance, if >stepsize, limit to stepsize + rounding
+        4. If no obstacle, place it, or back to 1
+        5*. If RRT*, place node , distance/max step, choose shorter
+        6*. Check nodes around, reconnect if required
+        7. Check if reach goal, if yes, finish
+        8. Check if near  goal, if yes, go 3
         """
-        # Create tree, main function
-        pass
-    def plot(self):
+        # Some loop
+        while True:
+            # Increment current iteration
+            self.current_iteration += 1
+
+            # 1. Generate a random node
+            random_node = self.newNode()
+            # Regenerate if node exist
+            while random_node in self.nodes:
+                random_node = self.newNode()
+
+            # 2. Find nearest exist node
+            nearest_node = self.newNode(random_node)
+
+            # 3. Place the new node
+            new_node = self.placeNode(random_node, nearest_node)
+            # If new node exist, skip
+            ###
+
+            # 4. If no obstacle, place it, or break this round
+            if not self.ifObstacle:
+                pass
+                # Connect new nodes and add to list
+            
+            # 7. Check if reach goal, if yes, finish reachGoal(self)
+            
+            # Check if reach maximum iteration
+
+    def plotNode(self):
         """
         Calculating the straight line distance between self and imported node
 
@@ -251,23 +338,16 @@ class RRT:
         # Plot graph while going
         pass
 
+    def plotPath(self):
+        """
+        Calculating the straight line distance between self and imported node
 
+        Args:
+            node_2: 2nd node to compare, datatype class Node
+            
+        Returns:
+            length in float
+        """
+        # Plot graph while going
+        pass
 
-
-
-
-"""
-# Example Usage
-maps = ["map1.csv","map2.csv","map3.csv"]
-for a in maps:
-    map_file = read_map_from_file(a)
-    map_size = map_file[0]
-    start = map_file[2]
-    goal = map_file[1]
-    obstacles = map_file[3]
-    step_size = 10
-    num_points = 800
-
-    path, edges = rrt(map_size, start, goal, obstacles, step_size, num_points)
-    plot_rrt(map_size, start, goal, obstacles, path, edges) 
-"""
