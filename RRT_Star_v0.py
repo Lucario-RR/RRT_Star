@@ -207,7 +207,7 @@ class RRT:
                 x = random.uniform(0, self.map.x_size)
                 y = random.uniform(0, self.map.y_size)
         
-        return Node(x, y)
+        self.random_node = Node(x, y)
     
     def nearestNode(self, new_node:Node)->Node:
         """
@@ -276,15 +276,33 @@ class RRT:
         # Return False if not blocked at all
         return True
 
-    def connectNode(self):
-        # Connect nodes if needed
-        # 5*. If RRT*, place node , distance/max step, choose shorter
-        # 6*. Check nodes around, reconnect if required
-        pass
+    def ifExistNode(self, new_node:Node)->bool:
+        return any(node.x == new_node.x and node.y == new_node.y for node in self.nodes)
+
+    def connectNode(self, nearest_node:Node, new_node:Node):
+        # For RRT Star
+        if self.star_iteration:
+            # Remained for RRT*
+            # 5*. If RRT*, place node , distance/max step, choose shorter
+            # 6*. Check nodes around, reconnect if required
+            pass
+        
+        else:
+            # Assign parent to new node
+            new_node.parent = nearest_node
+            # Return new node with parent
+            self.nodes.append(new_node)
 
     def reachGoal(self):
-        pass
         # Check if reach goal
+        if self.new_node.euclideanDistance(self.map.goal) < self.goal_radius:
+            return True
+        else:
+            return False
+
+    def getPath(self):
+        pass
+        # Get result path if success
 
     def buildTree(self):
         """
@@ -295,35 +313,44 @@ class RRT:
         5*. If RRT*, place node , distance/max step, choose shorter
         6*. Check nodes around, reconnect if required
         7. Check if reach goal, if yes, finish
-        8. Check if near  goal, if yes, go 3
+        8. Check if near goal, if yes, go 3
         """
         # Some loop
         while True:
+            # Initialize variables
+            self.random_node = None          
+            self.nearest_node = None
+            self.new_node = None
             # Increment current iteration
             self.current_iteration += 1
 
             # 1. Generate a random node
-            random_node = self.newNode()
-            # Regenerate if node exist
-            while random_node in self.nodes:
-                random_node = self.newNode()
+            self.newNode()
+            # Regenerate if node exist  ### Leave into generate new node part
+            while self.random_node in self.nodes:
+                self.newNode()
 
             # 2. Find nearest exist node
-            nearest_node = self.newNode(random_node)
+            nearest_node = self.newNode(self.random_node)
 
             # 3. Place the new node
-            new_node = self.placeNode(random_node, nearest_node)
-            # If new node exist, skip
-            ###
-
-            # 4. If no obstacle, place it, or break this round
-            if not self.ifObstacle:
-                pass
-                # Connect new nodes and add to list
+            self.new_node = self.placeNode(self.random_node, nearest_node)
             
-            # 7. Check if reach goal, if yes, finish reachGoal(self)
+            # 4. If new node does not exist, and not obstacled, connect node and add to list
+            if not (self.ifExistNode(self.new_node) or self.ifObstacle(nearest_node, self.new_node)):
+                self.connectNode(nearest_node, self.new_node)
+            
+            # 5. Check if reach goal, if yes, finish reachGoal(self)
+            if self.reachGoal():
+                # Check connection to goal has obstacle
+                if self.ifObstacle(self.new_node, self.map.goal):
+                    # Connect goal if in range
+                    self.connectNode(self.new_node, self.map.goal)
             
             # Check if reach maximum iteration
+            if self.current_iteration >= self.max_iteration:
+                # Break if reach max iteration
+                break
 
     def plotNode(self):
         """
