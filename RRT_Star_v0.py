@@ -585,5 +585,4 @@ map3 = Map((50,50),Node(45,48),Node(5, 5),[ObstacleCircle(Node(25,10), 20),Obsta
 
 rrt = RRT(map2,exploration_bias=0,max_iteration=200,force_step=True)
 
-with open('data-25.txt','a') as file:
-    file.writelines(f"{rrt.buildTree()}\n")
+rrt.buildTree()
