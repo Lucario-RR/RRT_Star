@@ -457,7 +457,7 @@ class RRT:
             True if reach goal; False if not reach goal or requirement failed
         """
         # Check if last node is within goal range
-        if self.new_node.euclideanDistance(self.map.goal) < self.goal_radius:
+        if self.new_node.euclideanDistance(self.map.goal) <= self.goal_radius:
             # Check connection to goal has obstacle
             if not self.ifObstacle(self.map.goal, self.new_node):
                 return True
