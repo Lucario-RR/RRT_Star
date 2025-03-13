@@ -1,8 +1,6 @@
-import numpy as np
 import matplotlib.pyplot as plt
 import math
 import random
-import csv
 
 
 
@@ -21,12 +19,15 @@ class Node:
         self.y
         self.parent
         euclideanDistance(self, node_2:Node)->float
+        plot(self,ax,style:str)
+        plotParentPath(self,ax,style:str)
+        __str__(self) -> str
         """
         self.x = x
         self.y = y
         self.parent = parent
     
-    def euclideanDistance(self, node_2)->float:
+    def euclideanDistance(self, node_2) -> float:
         """
         Calculating the straight line distance between self and imported node
 
@@ -39,13 +40,33 @@ class Node:
         return math.sqrt((self.x - node_2.x)**2 + (self.y - node_2.y)**2)
 
     def plot(self,ax,style:str):
+        """
+        Plot node itself with passed in style
+
+        Args:
+            ax: The figure
+            style: Style for plotting the node
+        """
         ax.plot(self.x, self.y, style)
 
     def plotParentPath(self,ax,style:str):
+        """
+        Plot a path between node itself and its parent node with given style
+
+        Args:
+            ax: The figure
+            style: Style for plotting the path
+        """
         ax.plot([self.x, self.parent.x],[self.y, self.parent.y], style)
 
-    def __str__(self):
-        return str(f"{self.x},{self.y}")
+    def __str__(self) -> str:
+        """
+        Print node in "(x,y)" format
+
+        Returns:
+            String of it's own value
+        """
+        return str(f"({self.x},{self.y})")
 
 
 
@@ -63,12 +84,13 @@ class ObstacleCircle:
             self.center
             self.radius
             isBlocked(self,node_1:Node,node_2:Node=None)->bool
+            plot(self.ax)
         """
         self.type = 'circle' # Identify the type of obstacle
         self.center = center
         self.radius = radius
     
-    def isBlocked(self,node_1:Node,node_2:Node=None)->bool:
+    def isBlocked(self,node_1:Node,node_2:Node=None) -> bool:
         """
         Check if 1 node or line between 2 nodes is inside this circular object
 
@@ -115,6 +137,13 @@ class ObstacleCircle:
         else: return False
     
     def plot(self,ax):
+        """
+        Plot circle on graph
+
+        Args:
+            ax: The figure
+            style: Style for plotting the path
+        """
         ax.add_patch(plt.Circle((self.center.x, self.center.y), self.radius, color='red'))
 
 
@@ -171,7 +200,7 @@ class Map:
             self.start
             self.goal
             self.obstacles
-            plot(self)
+            plot(self,ax)
         """
         self.x_size = map[0]
         self.y_size = map[1]
@@ -183,6 +212,9 @@ class Map:
         """
         Plot the map with obstacles, no path
         """
+        # Set figure aspect ration to map aspect ratio
+        ax.set_aspect(self.y_size/self.x_size)
+
         # Restrict total area
         ax.set_xlim(0,self.x_size)
         ax.set_ylim(0,self.y_size)
@@ -198,22 +230,78 @@ class Map:
 
 
 class RRT:
-    def __init__(self, map:Map, nodes:list[Node]=[], int_node:bool=True, exploration_bias:float=0, max_step:float=10, force_step:bool=False, goal_radius:float=10, max_iteration:int=300, star_iteration:int=0):
+    def __init__(self, map:Map, \
+                nodes:list[Node]=[], \
+                int_node:bool=True, exploration_bias:float=0, max_retry:int = 20, \
+                force_step:bool=False, step_ratio:float = 0.1, max_step:float=10, goal_radius:float=10, \
+                max_iteration:int=200, star_iteration:int=0, \
+                animation_duration:float=0.02):
+        """
+        A place where everything combines together
+        
+        Args:
+            map: Map in class Map
+            nodes: A list of existing tree nodes in class Node; Default empty list
+            int_node: Indentify whether rounding to integer is needed; Default True
+            exploration_bias: The probability of set goal as random point, speed up sometimes; Default 0
+            max_retry: Max tries for find a non-exist node; Default 20
+            force_step: True if every path has to be max_step length; Default True
+            step_ratio: A ratio identify how long max step should be depending on map, set 0 to disable; Default 0.1
+            max_step: Maximum length of each step; Defaule 10
+            goal_radius: Any node within this range of goal will consider reach goal, set 0 if same as max step; Default 10
+            max_iteration: Max iterations before reach a goal; Default 200
+            star_iteration: Total iterations for RRT* algorithm, set 0 to disable RRT*; Default 0
+            animation_duration: Duration for each frame; Default 0.02
+            
+        Public Variables and Methods:
+        self.x
+        self.y
+        self.parent
+        euclideanDistance(self, node_2:Node)->float
+        plot(self,ax,style:str)
+        plotParentPath(self,ax,style:str)
+        __str__(self) -> str
+
+        """
         # Map
         self.map = map
+        
         # Nodes
         self.nodes = nodes
         self.nodes.append(self.map.start) # Add start into node list
-        # Config
+        
+        # Config - Node
         self.int_node = int_node
         self.exploration_bias = exploration_bias # Range 0-1
-        self.max_step = max_step
+        self.max_retry = max_retry 
+
+        # Config - Step
         self.force_step = force_step
-        self.max_retry = 20 ###
-        self.goal_radius = goal_radius
+        # Apply ratio to set a variable step size
+        if step_ratio:
+            self.max_step = ((self.map.x_size + self.map.y_size) / 2 * step_ratio)
+        # Use input step size
+        else:
+            self.max_step = max_step
+        # Apply ratio to set a variable step size
+        if step_ratio:
+            self.max_step = ((self.map.x_size + self.map.y_size) / 2 * step_ratio)
+        # Use input step size
+        else:
+            self.max_step = max_step
+        if goal_radius:
+            self.goal_radius = goal_radius
+        # Use max_step as goal radius
+        else:
+            self.goal_radius = self.max_step
+        
+        # Config - Iteration
         self.current_iteration = 0 # Define current iteration
         self.max_iteration = max_iteration # Max iteration before finding a path
         self.star_iteration = star_iteration # Number of star iteration, set 0 to disable
+        
+        # Config - Plotting
+        self.animation_duration = animation_duration
     
     def newNode(self) -> Node:
         """
@@ -226,7 +314,6 @@ class RRT:
         """
         # Apply bias at set lucky rate
         if random.random() <= self.exploration_bias:
-            print(1)
             return self.map.goal
         
         # Generate new node randomly in map
@@ -340,6 +427,7 @@ class RRT:
         Remain space for RRT* algorithm, which may reconnnect nodes around
 
         Args:
+            ax: The figure
             old_node: Parent node put into new node
             new_node: Add parent and store this new node
         """
@@ -361,7 +449,7 @@ class RRT:
             self.nodes[-1].plot(ax, 'b.')
             self.nodes[-1].plotParentPath(ax,'k-')
 
-    def reachGoal(self):
+    def reachGoal(self) -> bool:
         """
         Check if the goal is reachable
             
@@ -391,16 +479,22 @@ class RRT:
             current_node = current_node.parent
         return path
 
-    def buildTree(self) -> bool:
+    def buildTree(self) -> int:
         """
+        Steps to build a tree:
         1. Generate new node (done)
         2. Find nearest node (done)
         3. Check distance, if >stepsize, limit to stepsize + rounding
         4. If no obstacle, place it, or back to 1
+        5. Check if reach goal, if yes, finish
+        6. Check if near goal, if yes, go 3
+
+        For RRT* only
         5*. If RRT*, place node , distance/max step, choose shorter
         6*. Check nodes around, reconnect if required
-        7. Check if reach goal, if yes, finish
-        8. Check if near goal, if yes, go 3
+        
+        Returns:
+            Number of iterations
         """
         # Initialize plot
         plt.ion() # Keep program running while plotting
@@ -418,7 +512,10 @@ class RRT:
             counter = 0
             # Increment current iteration
             self.current_iteration += 1
-            print(f"Iteration: {self.current_iteration}")
+            ###DEBUG print(f"Iteration: {self.current_iteration}")
+
+            # Print title message
+            plt.title(f"Iteration: {self.current_iteration}, Step: {self.max_step}, Bias: {self.exploration_bias}, Fix Step: {self.force_step}")
 
             # 1. Generate a random node
             self.random_node = self.newNode()
@@ -428,7 +525,7 @@ class RRT:
                 counter += 1
                 self.random_node = self.newNode()
                 if counter >= self.max_retry:
-                    # Terminate if too many tries ###
+                    # Terminate if too many tries on generating new node ###
                     flag = False
                     break
             
@@ -449,7 +546,7 @@ class RRT:
                 if self.reachGoal():
                     self.connectNode(ax,self.nodes[-1], self.map.goal)
 
-                    print("Solution found")
+                    ###print("Solution found")
                     # Connect goal if in range
                     ### Call output path
                     path = self.getPath()
@@ -459,38 +556,34 @@ class RRT:
                         node.plotParentPath(ax,'c-')
 
                     flag = True # Success
+                    plt.title(f"Valid Path! Iteration: {self.current_iteration}, Step: {self.max_step}, Bias: {self.exploration_bias}, Fix Step: {self.force_step}")
                     break
                 
             # Check if reach maximum iteration
             if self.current_iteration >= self.max_iteration:
                 # Break if reach max iteration
-                print("No solution")
                 flag =  False
+                plt.title(f"Max Iteration Reached! Iteration: {self.current_iteration}, Step: {self.max_step}, Bias: {self.exploration_bias}, Fix Step: {self.force_step}")
                 break
+
+            # Plot the graph with slightly delay
+            plt.show()
+            plt.pause(self.animation_duration)
         
         # Show final plot
         plt.ioff()
         plt.show()
-
         # Return result
-        return flag
+        return self.current_iteration
 
-    def plot(self):
-        """
-        Calculating the straight line distance between self and imported node
-
-        Args:
-            node_2: 2nd node to compare, datatype class Node
-            
-        Returns:
-            length in float
-        """
-        # Plot graph while going
-        pass
 
 
 # Test run
 map1 = Map((100,100),Node(5,5),Node(95, 95),[ObstacleCircle(Node(10, 10), 2),ObstacleCircle(Node(30, 10), 2),ObstacleCircle(Node(50, 10), 7)])
 map2 = Map((150,150),Node(5,5),Node(95, 95),[ObstacleCircle(Node(10, 90), 10),ObstacleCircle(Node(30, 30), 20),ObstacleCircle(Node(50, 10), 7)])
-rrt = RRT(map2)
-rrt.buildTree()
+map3 = Map((50,50),Node(45,48),Node(5, 5),[ObstacleCircle(Node(25,10), 20),ObstacleCircle(Node(25,40), 20)])
+
+rrt = RRT(map2,exploration_bias=0,max_iteration=200,force_step=True)
+
+with open('data-25.txt','a') as file:
+    file.writelines(f"{rrt.buildTree()}\n")
